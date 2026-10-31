@@ -2,6 +2,7 @@ import 'dayjs/locale/de'
 import 'dayjs/locale/el'
 import 'dayjs/locale/es'
 import 'dayjs/locale/fr'
+import 'dayjs/locale/he'
 import 'dayjs/locale/it'
 import 'dayjs/locale/ja'
 import 'dayjs/locale/pt'
@@ -29,6 +30,7 @@ const logger = loggerService.withContext('I18N')
 // the current language (and the en-US fallback) on demand inside initI18n().
 const localeLoaders = {
   'en-US': () => import('./locales/en-us.json'),
+  'he-IL': () => import('./locales/he-il.json'),
   'zh-CN': () => import('./locales/zh-cn.json'),
   'zh-TW': () => import('./locales/zh-tw.json'),
   'de-DE': () => import('./locales/de-de.json'),
@@ -56,6 +58,7 @@ export const getLanguageCode = async () => {
 // Map i18n language codes to dayjs locale codes
 const dayjsLocaleMap: Record<string, string> = {
   'en-US': 'en',
+  'he-IL': 'he',
   'ja-JP': 'ja',
   'ru-RU': 'ru',
   'zh-CN': 'zh-cn',

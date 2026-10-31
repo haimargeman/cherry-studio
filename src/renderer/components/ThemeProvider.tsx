@@ -1,5 +1,6 @@
 import type { PropsWithChildren } from 'react'
 import React, { useEffect, useState } from 'react'
+import './hebrew-rtl.css'
 
 import { usePreference } from '@data/hooks/usePreference'
 import { loggerService } from '@logger'
@@ -60,6 +61,7 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
       document.body.classList.add('light')
     }
     document.documentElement.lang = language || navigator.language
+    document.documentElement.dir = language === 'he-IL' ? 'rtl' : 'ltr'
 
     // if theme is old auto, then set theme to system
     // we can delete this after next big release

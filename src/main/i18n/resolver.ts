@@ -7,6 +7,7 @@ import { defaultLanguage } from '@shared/utils/languages'
 import deDE from './locales/de-de.json'
 import elGR from './locales/el-gr.json'
 import EnUs from './locales/en-us.json'
+import HeIL from './locales/he-il.json'
 import esES from './locales/es-es.json'
 import frFR from './locales/fr-fr.json'
 import itIT from './locales/it-it.json'
@@ -23,6 +24,7 @@ import ZhTw from './locales/zh-tw.json'
 const locales = Object.fromEntries(
   [
     ['en-US', EnUs],
+    ['he-IL', HeIL],
     ['zh-CN', ZhCn],
     ['zh-TW', ZhTw],
     ['ja-JP', JaJP],

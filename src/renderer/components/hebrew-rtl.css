@@ -1,0 +1,19 @@
+/* Hebrew interface: intentionally conservative, scoped to language selection. */
+:root[lang="he-IL"][dir="rtl"] {
+  direction: rtl;
+}
+/* Source code, terminals, model identifiers and technical outputs stay LTR. */
+:root[lang="he-IL"][dir="rtl"] :is(pre, code, kbd, samp, .monaco-editor, .cm-editor, .xterm, .xterm-screen, .view-lines, .hljs, .shiki, [data-language], [data-code-block]) {
+  direction: ltr;
+  text-align: left;
+  unicode-bidi: isolate;
+}
+/* Inline code should not reorder the surrounding Hebrew sentence. */
+:root[lang="he-IL"][dir="rtl"] :is(code, kbd, samp) {
+  unicode-bidi: isolate;
+}
+/* Form fields inherit appropriate direction; never globally force inputs LTR. */
+:root[lang="he-IL"][dir="rtl"] :is(input[type="url"], input[type="email"]) {
+  direction: ltr;
+  text-align: left;
+}

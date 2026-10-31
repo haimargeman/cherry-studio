@@ -86,6 +86,7 @@ export type LanguageVarious =
   | 'de-DE'
   | 'el-GR'
   | 'en-US'
+  | 'he-IL'
   | 'es-ES'
   | 'fr-FR'
   | 'it-IT'
