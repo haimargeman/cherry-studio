@@ -31,6 +31,7 @@ export interface EmojiRecord {
 
 const DATA_URL_MAP: Record<LanguageVarious, string> = {
   'en-US': dataEN,
+  'he-IL': dataEN,
   'zh-CN': dataZH,
   'zh-TW': dataZH_HANT,
   'de-DE': dataDE,
