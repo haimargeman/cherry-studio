@@ -1,0 +1,42 @@
+name: Hebrew Validation (No Installer)
+
+on:
+  push:
+    branches:
+      - hebrew-validation
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: TypeScript, Lint and i18n
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v5
+        with:
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: TypeScript validation
+        run: pnpm typecheck
+
+      - name: Lint validation
+        run: pnpm lint
+
+      - name: Translation validation
+        run: pnpm i18n:lint
