@@ -1,0 +1,154 @@
+name: Hebrew Windows - Validate and Build Automatically
+
+on:
+  push:
+    branches: [hebrew-validation]
+    paths:
+      - '.github/workflows/hebrew-windows-auto.yml'
+      - 'src/**'
+      - 'i18next.config.ts'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-and-build:
+    runs-on: windows-latest
+    timeout-minutes: 110
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      CSC_FOR_PULL_REQUEST: 'true'
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Check out Hebrew branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v5
+        with:
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate TypeScript
+        run: pnpm typecheck
+
+      - name: Validate Lint
+        run: pnpm lint
+
+      - name: Run Hebrew i18n lint
+        shell: pwsh
+        run: |
+          pnpm i18n:lint *> "$env:RUNNER_TEMP\i18n-hebrew.log"
+          "HEBREW_I18N_EXIT=$LASTEXITCODE" >> $env:GITHUB_ENV
+          Write-Host "Hebrew i18n exit code: $LASTEXITCODE"
+
+      - name: Set up clean main comparison outside workspace
+        shell: pwsh
+        run: |
+          git worktree add --detach "$env:RUNNER_TEMP\baseline" origin/main
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Install baseline dependencies
+        shell: pwsh
+        working-directory: ${{ runner.temp }}/baseline
+        run: |
+          pnpm install --frozen-lockfile
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Run baseline i18n lint
+        shell: pwsh
+        working-directory: ${{ runner.temp }}/baseline
+        run: |
+          pnpm i18n:lint *> "$env:RUNNER_TEMP\i18n-main.log"
+          "MAIN_I18N_EXIT=$LASTEXITCODE" >> $env:GITHUB_ENV
+          Write-Host "Main i18n exit code: $LASTEXITCODE"
+
+      - name: Compare i18n errors against main
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          function Get-I18nErrors($path) {
+            $result = [System.Collections.Generic.List[string]]::new()
+            foreach ($line in (Get-Content -LiteralPath $path -Encoding utf8)) {
+              if ($line -match '^\s*(?:\d+:\s*)?Error:\s*(.+?)\s*$') {
+                $result.Add($Matches[1].Trim())
+              }
+            }
+            return ,$result.ToArray()
+          }
+          $main = @(Get-I18nErrors "$env:RUNNER_TEMP\i18n-main.log")
+          $hebrew = @(Get-I18nErrors "$env:RUNNER_TEMP\i18n-hebrew.log")
+          Write-Host "main: $($main.Count) errors, exit=$env:MAIN_I18N_EXIT"
+          Write-Host "Hebrew: $($hebrew.Count) errors, exit=$env:HEBREW_I18N_EXIT"
+          if ($env:MAIN_I18N_EXIT -eq '0' -and $env:HEBREW_I18N_EXIT -eq '0') { exit 0 }
+          if ($env:MAIN_I18N_EXIT -eq '0' -and $env:HEBREW_I18N_EXIT -ne '0') {
+            Write-Error 'Hebrew i18n lint failed while main passed.'
+            exit 1
+          }
+          if ($main.Count -eq 0 -or ($hebrew.Count -eq 0 -and $env:HEBREW_I18N_EXIT -ne '0')) {
+            Write-Error 'Cannot compare nonzero lint exits without parsed errors. Review uploaded logs.'
+            exit 1
+          }
+          # Compare as multisets: duplicate diagnostic counts must also match.
+          $counts = @{}
+          foreach ($errorMessage in $main) {
+            if (-not $counts.ContainsKey($errorMessage)) { $counts[$errorMessage] = 0 }
+            $counts[$errorMessage]++
+          }
+          $new = [System.Collections.Generic.List[string]]::new()
+          foreach ($errorMessage in $hebrew) {
+            if ($counts.ContainsKey($errorMessage) -and $counts[$errorMessage] -gt 0) {
+              $counts[$errorMessage]--
+            } else {
+              $new.Add($errorMessage)
+            }
+          }
+          if ($new.Count -gt 0) {
+            $new | ForEach-Object { Write-Host "NEW i18n error: $_" }
+            Write-Error "Found $($new.Count) new i18n errors compared to main."
+            exit 1
+          }
+          Write-Host 'PASS: no additional i18n errors compared to main.'
+
+      - name: Prepare Windows native dependencies
+        shell: pwsh
+        run: |
+          pnpm download:binaries
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm rebuild:electron
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build unsigned Windows x64 installer
+        run: pnpm build:win:x64
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: cherry-studio-hebrew-windows-x64
+          path: |
+            dist/*.exe
+            dist/*.blockmap
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload i18n comparison logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hebrew-i18n-comparison-logs
+          path: |
+            ${{ runner.temp }}/i18n-main.log
+            ${{ runner.temp }}/i18n-hebrew.log
+          if-no-files-found: warn
+          retention-days: 7
