@@ -1,0 +1,70 @@
+
+name: Export Hebrew Translation Sources
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Collect source files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p export/src export/.github
+
+          for dir in \
+            src/renderer/i18n \
+            src/main/i18n \
+            src/renderer/src \
+            src/renderer/styles \
+            packages \
+            .github/workflows; do
+            if [ -d "$dir" ]; then
+              mkdir -p "export/$dir"
+              if [ "$dir" = "src/renderer/src" ]; then
+                find "$dir" -type f \( \
+                  -iname '*locale*' -o \
+                  -iname '*i18n*' -o \
+                  -iname '*language*' -o \
+                  -iname '*direction*' \
+                \) -exec cp --parents {} export/ \;
+              else
+                cp -a "$dir/." "export/$dir/"
+              fi
+            fi
+          done
+
+          for file in \
+            i18next.config.ts \
+            package.json \
+            pnpm-workspace.yaml \
+            electron-builder.yml \
+            electron.vite.config.ts \
+            AGENTS.md \
+            CONTRIBUTING.i18n.yaml; do
+            if [ -f "$file" ]; then
+              cp "$file" export/
+            fi
+          done
+
+          cd export
+          zip -qr ../cherry-hebrew-sources.zip .
+
+          cd ..
+          ls -lh cherry-hebrew-sources.zip
+
+      - name: Upload source archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: cherry-hebrew-sources
+          path: cherry-hebrew-sources.zip
+          if-no-files-found: error
+          retention-days: 7
