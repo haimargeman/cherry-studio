@@ -1,46 +1,47 @@
 
-name: Export Hebrew Translation Sources
+name: Export Hebrew Sources to Release
 
 on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   export:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Collect source files
+      - name: Collect translation sources
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p export/src export/.github
+
+          mkdir -p export
 
           for dir in \
             src/renderer/i18n \
             src/main/i18n \
-            src/renderer/src \
             src/renderer/styles \
             packages \
             .github/workflows; do
             if [ -d "$dir" ]; then
               mkdir -p "export/$dir"
-              if [ "$dir" = "src/renderer/src" ]; then
-                find "$dir" -type f \( \
-                  -iname '*locale*' -o \
-                  -iname '*i18n*' -o \
-                  -iname '*language*' -o \
-                  -iname '*direction*' \
-                \) -exec cp --parents {} export/ \;
-              else
-                cp -a "$dir/." "export/$dir/"
-              fi
+              cp -a "$dir/." "export/$dir/"
             fi
           done
+
+          if [ -d src/renderer/src ]; then
+            find src/renderer/src -type f \( \
+              -iname '*locale*' -o \
+              -iname '*i18n*' -o \
+              -iname '*language*' -o \
+              -iname '*direction*' \
+            \) -exec cp --parents {} export/ \;
+          fi
 
           for file in \
             i18next.config.ts \
@@ -56,15 +57,21 @@ jobs:
           done
 
           cd export
-          zip -qr ../cherry-hebrew-sources.zip .
-
+          zip -qr ../cherry-hebrew-sources.zi .
           cd ..
-          ls -lh cherry-hebrew-sources.zip
 
-      - name: Upload source archive
-        uses: actions/upload-artifact@v4
-        with:
-          name: cherry-hebrew-sources
-          path: cherry-hebrew-sources.zip
-          if-no-files-found: error
-          retention-days: 7
+          ls -lh cherry-hebrew-sources.zi
+
+      - name: Publish to GitHub Releases
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: hebrew-sources-${{ github.run_number }}
+        run: |
+          gh release create "$TAG" \
+            cherry-hebrew-sources.zi \
+            --title "Hebrew Translation Sources $TAG" \
+            --notes "Source files for Cherry Studio Hebrew localization." \
+            --target "$GITHUB_SHA" \
+            --prerelease \
+            --latest=false
