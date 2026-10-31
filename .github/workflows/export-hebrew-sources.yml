@@ -1,5 +1,4 @@
-
-name: Export Hebrew Sources to Release
+name: Export Complete Cherry Studio Sources
 
 on:
   workflow_dispatch:
@@ -7,71 +6,77 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: hebrew-source-export
+  cancel-in-progress: false
+
 jobs:
   export:
+    name: Package complete source and publish release
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
-      - name: Checkout repository
+      - name: Checkout the exact commit
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 1
 
-      - name: Collect translation sources
+      - name: Verify and package every tracked source file
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p dist
 
-          mkdir -p export
+          # Unlike selecting folders manually, git archive includes ALL files
+          # tracked in this commit, including shared, native, scripts, build,
+          # resources, tests, workflow files and localization catalogs.
+          git archive --format=zip --output=dist/cherry-studio-complete.zip HEAD
 
-          for dir in \
-            src/renderer/i18n \
-            src/main/i18n \
-            src/renderer/styles \
-            packages \
-            .github/workflows; do
-            if [ -d "$dir" ]; then
-              mkdir -p "export/$dir"
-              cp -a "$dir/." "export/$dir/"
-            fi
-          done
+          test -s dist/cherry-studio-complete.zip
+          unzip -tq dist/cherry-studio-complete.zip
 
-          if [ -d src/renderer/src ]; then
-            find src/renderer/src -type f \( \
-              -iname '*locale*' -o \
-              -iname '*i18n*' -o \
-              -iname '*language*' -o \
-              -iname '*direction*' \
-            \) -exec cp --parents {} export/ \;
-          fi
+          # Add a readable manifest for verifying which commit was exported.
+          {
+            echo "Repository: ${GITHUB_REPOSITORY}"
+            echo "Commit: ${GITHUB_SHA}"
+            echo "Run: ${GITHUB_RUN_ID}"
+            echo "Files: $(git ls-files | wc -l)"
+            echo "Archive size (bytes): $(stat -c '%s' dist/cherry-studio-complete.zip)"
+          } > dist/SOURCE-INFO.txt
+          sha256sum dist/cherry-studio-complete.zip > dist/SHA256SUMS.txt
 
-          for file in \
-            i18next.config.ts \
-            package.json \
-            pnpm-workspace.yaml \
-            electron-builder.yml \
-            electron.vite.config.ts \
-            AGENTS.md \
-            CONTRIBUTING.i18n.yaml; do
-            if [ -f "$file" ]; then
-              cp "$file" export/
-            fi
-          done
+          # .zi is the same ZIP bytes with a different extension.
+          mv dist/cherry-studio-complete.zip dist/cherry-studio-complete.zi
+          sed -i 's/cherry-studio-complete\.zip/cherry-studio-complete.zi/' dist/SHA256SUMS.txt
+          ls -lh dist/
 
-          cd export
-          zip -qr ../cherry-hebrew-sources.zi .
-          cd ..
-
-          ls -lh cherry-hebrew-sources.zi
-
-      - name: Publish to GitHub Releases
+      - name: Publish release with source archive
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: hebrew-sources-${{ github.run_number }}
+          GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
+          TAG="hebrew-sources-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           gh release create "$TAG" \
-            cherry-hebrew-sources.zi \
-            --title "Hebrew Translation Sources $TAG" \
-            --notes "Source files for Cherry Studio Hebrew localization." \
+            dist/cherry-studio-complete.zi \
+            dist/SOURCE-INFO.txt \
+            dist/SHA256SUMS.txt \
+            --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
+            --title "Complete Cherry Studio sources (${GITHUB_SHA:0:7})" \
+            --notes "Complete tracked source snapshot for the Hebrew localization project. No compiled binaries; rename .zi to .zip to extract. Commit: $GITHUB_SHA" \
             --prerelease \
             --latest=false
+
+      - name: Also retain as Actions artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cherry-full-source-${{ github.run_id }}
+          path: |
+            dist/cherry-studio-complete.zi
+            dist/SOURCE-INFO.txt
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 7
