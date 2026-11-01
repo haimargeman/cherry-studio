@@ -1,19 +1,119 @@
-/* Hebrew interface: intentionally conservative, scoped to language selection. */
-:root[lang="he-IL"][dir="rtl"] {
+/*
+ * Cherry Studio Hebrew selective RTL
+ *
+ * Window controls and tab navigation retain original geometry.
+ * Sidebars, settings navigation, and Hebrew text use RTL.
+ * Composer toolbars retain their original control ordering.
+ */
+
+/* Main document remains LTR for predictable layout. */
+:root[lang="he-IL"] {
+  direction: ltr;
+}
+
+/* Main application shell:
+   place the application sidebar on the right. */
+:root[lang="he-IL"] body[os="windows"]
+.flex.h-screen.w-screen.flex-row {
   direction: rtl;
 }
-/* Source code, terminals, model identifiers and technical outputs stay LTR. */
-:root[lang="he-IL"][dir="rtl"] :is(pre, code, kbd, samp, .monaco-editor, .cm-editor, .xterm, .xterm-screen, .view-lines, .hljs, .shiki, [data-language], [data-code-block]) {
+
+/* The main content column and tab navigation use
+   their original left-to-right layout. */
+:root[lang="he-IL"] [data-ui="app.tab-bar"] {
+  direction: ltr;
+}
+
+/* Keep the native Windows caption-control area clear. */
+:root[lang="he-IL"] [data-ui="app.tab-bar"]
+[data-testid="app-shell-tab-strip"] {
+  direction: ltr;
+}
+
+/* Main sidebar content and labels. */
+:root[lang="he-IL"] #app-sidebar,
+:root[lang="he-IL"] .group\/sidebar {
+  direction: rtl;
+  text-align: right;
+}
+
+/* Settings:
+   navigation stays on the right and content remains RTL. */
+:root[lang="he-IL"] [data-ui="settings.view"],
+:root[lang="he-IL"] [data-ui="settings.navigation"],
+:root[lang="he-IL"] [data-ui="settings.content"] {
+  direction: rtl;
+}
+
+:root[lang="he-IL"] [data-ui="settings.navigation"] {
+  text-align: right;
+}
+
+/* Chat composer shell retains normal control geometry. */
+:root[lang="he-IL"] [data-ui="chat.composer"] {
+  direction: ltr;
+}
+
+:root[lang="he-IL"]
+[data-ui="part:composer-actions"] {
+  direction: ltr;
+}
+
+/* The editor itself supports proper Hebrew typing. */
+:root[lang="he-IL"]
+[data-ui="part:composer-input"] {
+  direction: rtl !important;
+  text-align: right !important;
+  unicode-bidi: plaintext;
+}
+
+:root[lang="he-IL"]
+[data-ui="part:composer-input"]::placeholder {
+  direction: rtl;
+  text-align: right;
+}
+
+/* Rich-text editors used by composer variants. */
+:root[lang="he-IL"]
+[data-ui="chat.composer"]
+:is(.ProseMirror, [contenteditable="true"]) {
+  direction: rtl;
+  text-align: right;
+  unicode-bidi: plaintext;
+}
+
+/* Ordinary Hebrew text fields in settings. */
+:root[lang="he-IL"] [data-ui="settings.view"]
+:is(textarea, input[type="text"], input[type="search"]) {
+  direction: rtl;
+  text-align: right;
+}
+
+/* Technical content must never be mirrored. */
+:root[lang="he-IL"]
+:is(
+  pre,
+  code,
+  kbd,
+  samp,
+  .monaco-editor,
+  .cm-editor,
+  .xterm,
+  .xterm-screen,
+  .view-lines,
+  .hljs,
+  .shiki,
+  [data-language],
+  [data-code-block]
+) {
   direction: ltr;
   text-align: left;
   unicode-bidi: isolate;
 }
-/* Inline code should not reorder the surrounding Hebrew sentence. */
-:root[lang="he-IL"][dir="rtl"] :is(code, kbd, samp) {
-  unicode-bidi: isolate;
-}
-/* Form fields inherit appropriate direction; never globally force inputs LTR. */
-:root[lang="he-IL"][dir="rtl"] :is(input[type="url"], input[type="email"]) {
+
+/* URLs and email addresses remain readable. */
+:root[lang="he-IL"]
+:is(input[type="url"], input[type="email"]) {
   direction: ltr;
   text-align: left;
 }

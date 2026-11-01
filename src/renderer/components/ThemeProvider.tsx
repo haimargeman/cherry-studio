@@ -61,7 +61,7 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
       document.body.classList.add('light')
     }
     document.documentElement.lang = language || navigator.language
-    document.documentElement.dir = language === 'he-IL' ? 'rtl' : 'ltr'
+    document.documentElement.dir = 'ltr'
 
     // if theme is old auto, then set theme to system
     // we can delete this after next big release
