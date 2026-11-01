@@ -1,0 +1,370 @@
+
+name: Hebrew Selective RTL - Fix Build and Release
+
+on:
+  push:
+    branches: [hebrew-validation]
+    paths:
+      - ".github/workflows/hebrew-selective-rtl-release.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: hebrew-selective-rtl-release
+  cancel-in-progress: false
+
+jobs:
+  fix-build-release:
+    runs-on: windows-latest
+    timeout-minutes: 110
+
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      CSC_FOR_PULL_REQUEST: "true"
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout existing Hebrew project
+        uses: actions/checkout@v4
+        with:
+          ref: hebrew-validation
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Apply selective RTL changes
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $providerPath = 'src/renderer/components/ThemeProvider.tsx'
+          $cssPath = 'src/renderer/components/hebrew-rtl.css'
+
+          if (-not (Test-Path $providerPath)) {
+            throw "ThemeProvider.tsx not found"
+          }
+
+          if (-not (Test-Path $cssPath)) {
+            throw "Hebrew RTL stylesheet not found"
+          }
+
+          $utf8 = [System.Text.UTF8Encoding]::new($false)
+
+          # Keep the document layout LTR.
+          # Individual sections will opt into RTL explicitly.
+          $provider = Get-Content $providerPath -Raw -Encoding utf8
+
+          $old = "document.documentElement.dir = language === 'he-IL' ? 'rtl' : 'ltr'"
+          $new = "document.documentElement.dir = 'ltr'"
+
+          if ($provider.Contains($old)) {
+            $provider = $provider.Replace($old, $new)
+            [System.IO.File]::WriteAllText(
+              (Join-Path (Get-Location) $providerPath),
+              $provider,
+              $utf8
+            )
+          } elseif (-not $provider.Contains($new)) {
+            throw "Unexpected ThemeProvider layout. Refusing unsafe edit."
+          }
+
+          # Explicit, scoped RTL rules.
+          # Replace previous Hebrew overrides rather than stacking
+          # conflicting CSS patches.
+          $css = @'
+          /*
+           * Cherry Studio Hebrew selective RTL
+           *
+           * Window controls and tab navigation retain original geometry.
+           * Sidebars, settings navigation, and Hebrew text use RTL.
+           * Composer toolbars retain their original control ordering.
+           */
+
+          /* Main document remains LTR for predictable layout. */
+          :root[lang="he-IL"] {
+            direction: ltr;
+          }
+
+          /* Main application shell:
+             place the application sidebar on the right. */
+          :root[lang="he-IL"] body[os="windows"]
+          .flex.h-screen.w-screen.flex-row {
+            direction: rtl;
+          }
+
+          /* The main content column and tab navigation use
+             their original left-to-right layout. */
+          :root[lang="he-IL"] [data-ui="app.tab-bar"] {
+            direction: ltr;
+          }
+
+          /* Keep the native Windows caption-control area clear. */
+          :root[lang="he-IL"] [data-ui="app.tab-bar"]
+          [data-testid="app-shell-tab-strip"] {
+            direction: ltr;
+          }
+
+          /* Main sidebar content and labels. */
+          :root[lang="he-IL"] #app-sidebar,
+          :root[lang="he-IL"] .group\/sidebar {
+            direction: rtl;
+            text-align: right;
+          }
+
+          /* Settings:
+             navigation stays on the right and content remains RTL. */
+          :root[lang="he-IL"] [data-ui="settings.view"],
+          :root[lang="he-IL"] [data-ui="settings.navigation"],
+          :root[lang="he-IL"] [data-ui="settings.content"] {
+            direction: rtl;
+          }
+
+          :root[lang="he-IL"] [data-ui="settings.navigation"] {
+            text-align: right;
+          }
+
+          /* Chat composer shell retains normal control geometry. */
+          :root[lang="he-IL"] [data-ui="chat.composer"] {
+            direction: ltr;
+          }
+
+          :root[lang="he-IL"]
+          [data-ui="part:composer-actions"] {
+            direction: ltr;
+          }
+
+          /* The editor itself supports proper Hebrew typing. */
+          :root[lang="he-IL"]
+          [data-ui="part:composer-input"] {
+            direction: rtl !important;
+            text-align: right !important;
+            unicode-bidi: plaintext;
+          }
+
+          :root[lang="he-IL"]
+          [data-ui="part:composer-input"]::placeholder {
+            direction: rtl;
+            text-align: right;
+          }
+
+          /* Rich-text editors used by composer variants. */
+          :root[lang="he-IL"]
+          [data-ui="chat.composer"]
+          :is(.ProseMirror, [contenteditable="true"]) {
+            direction: rtl;
+            text-align: right;
+            unicode-bidi: plaintext;
+          }
+
+          /* Ordinary Hebrew text fields in settings. */
+          :root[lang="he-IL"] [data-ui="settings.view"]
+          :is(textarea, input[type="text"], input[type="search"]) {
+            direction: rtl;
+            text-align: right;
+          }
+
+          /* Technical content must never be mirrored. */
+          :root[lang="he-IL"]
+          :is(
+            pre,
+            code,
+            kbd,
+            samp,
+            .monaco-editor,
+            .cm-editor,
+            .xterm,
+            .xterm-screen,
+            .view-lines,
+            .hljs,
+            .shiki,
+            [data-language],
+            [data-code-block]
+          ) {
+            direction: ltr;
+            text-align: left;
+            unicode-bidi: isolate;
+          }
+
+          /* URLs and email addresses remain readable. */
+          :root[lang="he-IL"]
+          :is(input[type="url"], input[type="email"]) {
+            direction: ltr;
+            text-align: left;
+          }
+          '@
+
+          [System.IO.File]::WriteAllText(
+            (Join-Path (Get-Location) $cssPath),
+            $css.Trim() + "`n",
+            $utf8
+          )
+
+          Write-Host "Selective RTL patch applied."
+
+      - name: Verify RTL patch
+        shell: pwsh
+        run: |
+          $provider = Get-Content `
+            'src/renderer/components/ThemeProvider.tsx' -Raw
+
+          $css = Get-Content `
+            'src/renderer/components/hebrew-rtl.css' -Raw
+
+          if (-not $provider.Contains("document.documentElement.dir = 'ltr'")) {
+            throw "Document direction patch missing."
+          }
+
+          $required = @(
+            '[data-ui="app.tab-bar"]',
+            '[data-ui="settings.navigation"]',
+            '[data-ui="settings.content"]',
+            '[data-ui="part:composer-input"]',
+            '[data-ui="part:composer-actions"]'
+          )
+
+          foreach ($selector in $required) {
+            if (-not $css.Contains($selector)) {
+              throw "Missing selector: $selector"
+            }
+          }
+
+          Write-Host "RTL structure checks passed."
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v5
+        with:
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install project dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate TypeScript
+        run: pnpm typecheck
+
+      - name: Validate ESLint
+        run: pnpm lint
+
+      - name: Prepare Windows native dependencies
+        shell: pwsh
+        run: |
+          pnpm download:binaries
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+          pnpm rebuild:electron
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+      - name: Build Setup and Portable
+        run: pnpm build:win:x64
+
+      - name: Verify installer files
+        shell: pwsh
+        run: |
+          $files = @(
+            'dist/Cherry-Studio-2.1.10-win-x64-setup.exe',
+            'dist/Cherry-Studio-2.1.10-win-x64-portable.exe'
+          )
+
+          foreach ($path in $files) {
+            if (-not (Test-Path $path)) {
+              throw "Missing executable: $path"
+            }
+
+            $file = Get-Item $path
+
+            if ($file.Length -lt 100MB) {
+              throw "Unexpected output size: $path"
+            }
+
+            Write-Host "Verified $($file.Name)"
+            Write-Host "Size: $($file.Length) bytes"
+          }
+
+      - name: Commit Hebrew layout changes
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email `
+            "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add `
+            src/renderer/components/ThemeProvider.tsx `
+            src/renderer/components/hebrew-rtl.css
+
+          git diff --cached --quiet
+
+          if ($LASTEXITCODE -ne 0) {
+            git commit -m "fix(i18n): selective Hebrew RTL layout [skip ci]"
+
+            if ($LASTEXITCODE -ne 0) {
+              throw "Commit failed"
+            }
+
+            git push origin HEAD:hebrew-validation
+
+            if ($LASTEXITCODE -ne 0) {
+              throw "Push failed"
+            }
+          }
+
+          $sha = (git rev-parse HEAD).Trim()
+
+          "RELEASE_SHA=$sha" >> $env:GITHUB_ENV
+
+      - name: Publish direct EXE downloads to Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: hebrew-2.1.10-selective-rtl-1
+          name: Cherry Studio 2.1.10 - Hebrew Selective RTL
+          target_commitish: ${{ env.RELEASE_SHA }}
+          prerelease: true
+          generate_release_notes: false
+          overwrite_files: true
+          fail_on_unmatched_files: true
+          body: |
+            Community Hebrew edition of Cherry Studio 2.1.10.
+
+            This build uses selective right-to-left layout:
+            - Hebrew text and editors are RTL
+            - Application sidebar remains on the right
+            - Settings navigation uses RTL
+            - Window navigation preserves safe LTR geometry
+            - Composer toolbar keeps original ordering
+            - Source code and technical content remain LTR
+
+            Windows x64:
+            - Setup installer
+            - Portable edition
+
+            Unsigned community build.
+            This is not an official Cherry Studio release.
+          files: |
+            dist/Cherry-Studio-2.1.10-win-x64-setup.exe
+            dist/Cherry-Studio-2.1.10-win-x64-portable.exe
+
+      - name: Publish completion summary
+        shell: pwsh
+        run: |
+          @'
+          ## Hebrew Selective RTL Release
+
+          Build and publish steps completed.
+
+          [Open Cherry Studio Releases](https://github.com/haimargeman/cherry-studio/releases)
+
+          Downloads:
+          - Windows x64 Setup
+          - Windows x64 Portable
+
+          Both executables are provided directly, without ZIP.
+          '@ >> $env:GITHUB_STEP_SUMMARY
