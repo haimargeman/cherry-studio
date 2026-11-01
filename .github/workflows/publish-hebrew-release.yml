@@ -1,0 +1,58 @@
+
+name: Publish Hebrew Cherry Studio Release
+
+on:
+  push:
+    branches:
+      - hebrew-validation
+    paths:
+      - .github/workflows/publish-hebrew-release.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download both EXE files from successful build
+        uses: actions/download-artifact@v4
+        with:
+          name: cherry-studio-hebrew-windows-x64
+          run-id: 41258019859
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: release-files
+
+      - name: Verify installation files
+        shell: bash
+        run: |
+          ls -lh release-files/
+          test -f release-files/Cherry-Studio-2.1.10-win-x64-setup.exe
+          test -f release-files/Cherry-Studio-2.1.10-win-x64-portable.exe
+
+      - name: Publish direct EXE downloads to GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: hebrew-2.1.10
+          name: Cherry Studio 2.1.10 - Hebrew Edition
+          target_commitish: hebrew-validation
+          prerelease: true
+          generate_release_notes: false
+          body: |
+            Cherry Studio 2.1.10 with Hebrew localization and RTL support.
+
+            Windows x64 downloads:
+            - Setup: standard Windows installer
+            - Portable: standalone portable edition
+
+            Community-built Hebrew edition.
+            Not an official Cherry Studio release.
+            Installer is unsigned.
+          files: |
+            release-files/Cherry-Studio-2.1.10-win-x64-setup.exe
+            release-files/Cherry-Studio-2.1.10-win-x64-portable.exe
+          fail_on_unmatched_files: true
+          overwrite_files: true
