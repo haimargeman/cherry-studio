@@ -155,3 +155,4 @@ jobs:
             ${{ runner.temp }}/i18n-hebrew.log
           if-no-files-found: warn
           retention-days: 7
+
