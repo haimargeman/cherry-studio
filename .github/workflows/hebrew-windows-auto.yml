@@ -49,7 +49,7 @@ jobs:
       - name: Run Hebrew i18n lint and record results
         shell: cmd
         run: |
-          pnpm i18n:lint > "%RUNNER_TEMP%\i18n-hebrew.log" 2>&1
+          call pnpm i18n:lint > "%RUNNER_TEMP%\i18n-hebrew.log" 2>&1
           set "LINT_STATUS=%ERRORLEVEL%"
           echo HEBREW_I18N_EXIT=%LINT_STATUS%>>"%GITHUB_ENV%"
           echo Hebrew i18n exit code: %LINT_STATUS%
@@ -72,7 +72,7 @@ jobs:
         shell: cmd
         working-directory: ${{ runner.temp }}/baseline
         run: |
-          pnpm i18n:lint > "%RUNNER_TEMP%\i18n-main.log" 2>&1
+          call pnpm i18n:lint > "%RUNNER_TEMP%\i18n-main.log" 2>&1
           set "LINT_STATUS=%ERRORLEVEL%"
           echo MAIN_I18N_EXIT=%LINT_STATUS%>>"%GITHUB_ENV%"
           echo Main i18n exit code: %LINT_STATUS%
