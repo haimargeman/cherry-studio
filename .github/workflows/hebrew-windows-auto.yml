@@ -1,3 +1,4 @@
+
 name: Hebrew Windows - Validate and Build Automatically
 
 on:
@@ -16,10 +17,12 @@ jobs:
   validate-and-build:
     runs-on: windows-latest
     timeout-minutes: 110
+
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       CSC_FOR_PULL_REQUEST: 'true'
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
     steps:
       - name: Check out Hebrew branch
         uses: actions/checkout@v4
@@ -51,22 +54,26 @@ jobs:
         run: |
           call pnpm i18n:lint > "%RUNNER_TEMP%\i18n-hebrew.log" 2>&1
           set "LINT_STATUS=%ERRORLEVEL%"
-          echo HEBREW_I18N_EXIT=%LINT_STATUS%>>"%GITHUB_ENV%"
+          >> "%GITHUB_ENV%" echo HEBREW_I18N_EXIT=%LINT_STATUS%
           echo Hebrew i18n exit code: %LINT_STATUS%
           exit /b 0
 
-      - name: Set up clean main comparison outside workspace
+      - name: Set up clean main comparison
         shell: pwsh
         run: |
           git worktree add --detach "$env:RUNNER_TEMP\baseline" origin/main
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
 
       - name: Install baseline dependencies
         shell: pwsh
         working-directory: ${{ runner.temp }}/baseline
         run: |
           pnpm install --frozen-lockfile
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
 
       - name: Run baseline i18n lint and record results
         shell: cmd
@@ -74,7 +81,7 @@ jobs:
         run: |
           call pnpm i18n:lint > "%RUNNER_TEMP%\i18n-main.log" 2>&1
           set "LINT_STATUS=%ERRORLEVEL%"
-          echo MAIN_I18N_EXIT=%LINT_STATUS%>>"%GITHUB_ENV%"
+          >> "%GITHUB_ENV%" echo MAIN_I18N_EXIT=%LINT_STATUS%
           echo Main i18n exit code: %LINT_STATUS%
           exit /b 0
 
@@ -82,55 +89,86 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          function Get-I18nErrors($path) {
+
+          function Get-I18nErrors([string]$path) {
             $result = [System.Collections.Generic.List[string]]::new()
+
             foreach ($line in (Get-Content -LiteralPath $path -Encoding utf8)) {
               if ($line -match '^\s*(?:\d+:\s*)?Error:\s*(.+?)\s*$') {
                 $result.Add($Matches[1].Trim())
               }
             }
-            return ,$result.ToArray()
+
+            return $result.ToArray()
           }
+
           $main = @(Get-I18nErrors "$env:RUNNER_TEMP\i18n-main.log")
           $hebrew = @(Get-I18nErrors "$env:RUNNER_TEMP\i18n-hebrew.log")
-          Write-Host "main: $($main.Count) errors, exit=$env:MAIN_I18N_EXIT"
+
+          Write-Host "Main: $($main.Count) errors, exit=$env:MAIN_I18N_EXIT"
           Write-Host "Hebrew: $($hebrew.Count) errors, exit=$env:HEBREW_I18N_EXIT"
-          if ($env:MAIN_I18N_EXIT -eq '0' -and $env:HEBREW_I18N_EXIT -eq '0') { exit 0 }
+
+          if ($env:MAIN_I18N_EXIT -eq '0' -and $env:HEBREW_I18N_EXIT -eq '0') {
+            Write-Host 'PASS: Both branches passed i18n lint.'
+            exit 0
+          }
+
+          if ($env:HEBREW_I18N_EXIT -eq '0' -and $env:MAIN_I18N_EXIT -ne '0') {
+            Write-Host 'PASS: Hebrew passed; main contains existing errors.'
+            exit 0
+          }
+
           if ($env:MAIN_I18N_EXIT -eq '0' -and $env:HEBREW_I18N_EXIT -ne '0') {
-            Write-Error 'Hebrew i18n lint failed while main passed.'
+            Write-Error 'Hebrew lint failed while main passed.'
             exit 1
           }
-          if ($main.Count -eq 0 -or ($hebrew.Count -eq 0 -and $env:HEBREW_I18N_EXIT -ne '0')) {
-            Write-Error 'Cannot compare nonzero lint exits without parsed errors. Review uploaded logs.'
+
+          if ($main.Count -eq 0 -or $hebrew.Count -eq 0) {
+            Write-Error 'Cannot compare failing lint results without parsed errors.'
             exit 1
           }
+
           $counts = @{}
+
           foreach ($errorMessage in $main) {
-            if (-not $counts.ContainsKey($errorMessage)) { $counts[$errorMessage] = 0 }
-            $counts[$errorMessage]++
+            if (-not $counts.ContainsKey($errorMessage)) {
+              $counts[$errorMessage] = 0
+            }
+            $counts[$errorMessage] = [int]$counts[$errorMessage] + 1
           }
-          $new = [System.Collections.Generic.List[string]]::new()
+
+          $newErrors = [System.Collections.Generic.List[string]]::new()
+
           foreach ($errorMessage in $hebrew) {
             if ($counts.ContainsKey($errorMessage) -and $counts[$errorMessage] -gt 0) {
-              $counts[$errorMessage]--
+              $counts[$errorMessage] = [int]$counts[$errorMessage] - 1
             } else {
-              $new.Add($errorMessage)
+              $newErrors.Add($errorMessage)
             }
           }
-          if ($new.Count -gt 0) {
-            $new | ForEach-Object { Write-Host "NEW i18n error: $_" }
-            Write-Error "Found $($new.Count) new i18n errors compared to main."
+
+          if ($newErrors.Count -gt 0) {
+            foreach ($errorMessage in $newErrors) {
+              Write-Host "NEW i18n error: $errorMessage"
+            }
+            Write-Error "Found $($newErrors.Count) new i18n errors."
             exit 1
           }
-          Write-Host 'PASS: no additional i18n errors compared to main.'
+
+          Write-Host 'PASS: No additional i18n errors compared to main.'
 
       - name: Prepare Windows native dependencies
         shell: pwsh
         run: |
           pnpm download:binaries
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
           pnpm rebuild:electron
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
 
       - name: Build unsigned Windows x64 installer
         run: pnpm build:win:x64
@@ -155,4 +193,3 @@ jobs:
             ${{ runner.temp }}/i18n-hebrew.log
           if-no-files-found: warn
           retention-days: 7
-
