@@ -46,12 +46,16 @@ jobs:
       - name: Validate Lint
         run: pnpm lint
 
-      - name: Run Hebrew i18n lint
+      - name: Run Hebrew i18n lint and record results
         shell: pwsh
         run: |
-          pnpm i18n:lint *> "$env:RUNNER_TEMP\i18n-hebrew.log"
-          "HEBREW_I18N_EXIT=$LASTEXITCODE" >> $env:GITHUB_ENV
-          Write-Host "Hebrew i18n exit code: $LASTEXITCODE"
+          $ErrorActionPreference = 'Continue'
+          $PSNativeCommandUseErrorActionPreference = $false
+          & pnpm i18n:lint *> "$env:RUNNER_TEMP\i18n-hebrew.log"
+          $status = $LASTEXITCODE
+          "HEBREW_I18N_EXIT=$status" >> $env:GITHUB_ENV
+          Write-Host "Hebrew i18n exit code: $status"
+          exit 0
 
       - name: Set up clean main comparison outside workspace
         shell: pwsh
@@ -66,13 +70,17 @@ jobs:
           pnpm install --frozen-lockfile
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Run baseline i18n lint
+      - name: Run baseline i18n lint and record results
         shell: pwsh
         working-directory: ${{ runner.temp }}/baseline
         run: |
-          pnpm i18n:lint *> "$env:RUNNER_TEMP\i18n-main.log"
-          "MAIN_I18N_EXIT=$LASTEXITCODE" >> $env:GITHUB_ENV
-          Write-Host "Main i18n exit code: $LASTEXITCODE"
+          $ErrorActionPreference = 'Continue'
+          $PSNativeCommandUseErrorActionPreference = $false
+          & pnpm i18n:lint *> "$env:RUNNER_TEMP\i18n-main.log"
+          $status = $LASTEXITCODE
+          "MAIN_I18N_EXIT=$status" >> $env:GITHUB_ENV
+          Write-Host "Main i18n exit code: $status"
+          exit 0
 
       - name: Compare i18n errors against main
         shell: pwsh
@@ -100,7 +108,6 @@ jobs:
             Write-Error 'Cannot compare nonzero lint exits without parsed errors. Review uploaded logs.'
             exit 1
           }
-          # Compare as multisets: duplicate diagnostic counts must also match.
           $counts = @{}
           foreach ($errorMessage in $main) {
             if (-not $counts.ContainsKey($errorMessage)) { $counts[$errorMessage] = 0 }
